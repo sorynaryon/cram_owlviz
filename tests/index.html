@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+</head>
+<body>
+<pre id="out">running…</pre>
+<script src="../vendor/n3.min.js"></script>
+<script src="../js/graph.js"></script>
+<script src="../js/rdfxml.js"></script>
+<script src="../js/functional.js"></script>
+<script src="../js/model.js"></script>
+<script src="../js/reasoner.js"></script>
+<script>
+/* Browser tests for the parsers, the model and the structural reasoner.
+   Open tests/index.html over http (python3 -m http.server); CI runs it in headless Chrome. */
+(async function () {
+  "use strict";
+  const NS = window.OWLViz;
+  const lines = [];
+  let failed = 0;
+  const check = (name, ok, detail) => { if (!ok) failed++; lines.push(`${ok ? "PASS" : "FAIL"} ${name}${!ok && detail ? "\n     " + detail : ""}`); };
+  const text = async (p) => (await fetch(p, { cache: "no-cache" })).text();
+  const R = "http://example.org/r#";
+
+  function load(files) {
+    const g = new NS.Graph();
+    const docs = files.map(([name, t, format], i) => {
+      const doc = { name, role: null, subjects: new Set(), declared: new Set(), ontologies: [], prefixes: [] };
+      const res = NS.parseInto(g, t, { name, format, docIndex: i, base: "http://example.org/" + name, onTriple: (s, p, o) => {
+        if (p === NS.RDF + "type" && NS.isIRI(s)) { if (o === NS.OWL + "Ontology") doc.ontologies.push(s); else doc.declared.add(s); }
+      } });
+      Object.assign(doc, res);
+      return doc;
+    });
+    return { g, docs };
+  }
+  // triples with blank node labels and XML literal markup removed, sorted: equal multisets for isomorphic simple graphs
+  function canonical(g) {
+    const term = (t) => NS.isLit(t) ? (t.dt === NS.RDF + "XMLLiteral" ? '"<xml>"' : JSON.stringify(t.v) + (t.lang ? "@" + t.lang : t.dt ? "^^" + t.dt : "")) : NS.isBNode(t) ? "_" : "<" + t + ">";
+    return Array.from(g.triples()).map(([s, p, o]) => `${term(s)} ${term(p)} ${term(o)}`).sort();
+  }
+
+  try {
+    // ---- RDF/XML parser against rdflib's reading of the same file
+    const rdf = load([["features.rdf", await text("fixtures/features.rdf")]]);
+    const nt = load([["features.nt", await text("fixtures/features.nt")]]);
+    check("RDF/XML format is detected", rdf.docs[0].format === "rdfxml", rdf.docs[0].format);
+    check("RDF/XML gives as many triples as rdflib", rdf.g.size === nt.g.size, `${rdf.g.size} vs ${nt.g.size}`);
+    const a = canonical(rdf.g), b = canonical(nt.g);
+    const missing = b.filter((x, i) => a[i] !== x);
+    check("RDF/XML gives the same triples as rdflib", JSON.stringify(a) === JSON.stringify(b), missing.slice(0, 5).join("\n     "));
+    check("xmlns prefixes are reported", rdf.docs[0].prefixes.some(([p, ns]) => p === "ex" && ns === "http://example.org/onto#"));
+
+    // ---- OWL Functional Syntax against the OWL API's conversion of the same file
+    const ofn = load([["features.ofn", await text("fixtures/features.ofn")]]);
+    const ofnRef = load([["features-ofn.nt", await text("fixtures/features-ofn.nt")]]);
+    check("Functional Syntax format is detected", ofn.docs[0].format === "functional", ofn.docs[0].format);
+    const fa = canonical(ofn.g), fb = canonical(ofnRef.g);
+    check("Functional Syntax gives the same triples as the OWL API", JSON.stringify(fa) === JSON.stringify(fb),
+      `${fa.length} vs ${fb.length}\n     only here: ${fa.filter((x) => !fb.includes(x)).slice(0, 4).join("\n     ")}\n     only OWL API: ${fb.filter((x) => !fa.includes(x)).slice(0, 4).join("\n     ")}`);
+
+    // ---- format detection
+    check("detect: Turtle", NS.detectFormat("a.ttl", null, "@prefix : <x#> .") === "turtle");
+    check("detect: N-Triples content without extension", NS.detectFormat("data", null, "<http://a> <http://b> <http://c> .") === "turtle");
+    check("detect: RDF/XML in .owl", NS.detectFormat("a.owl", null, '<?xml version="1.0"?>\n<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"/>') === "rdfxml");
+    check("detect: OWL/XML", NS.detectFormat("a.owl", null, '<?xml version="1.0"?>\n<Ontology xmlns="http://www.w3.org/2002/07/owl#" ontologyIRI="x"/>') === "owlxml");
+    check("detect: functional syntax", NS.detectFormat("a.owl", null, "Prefix(:=<http://x#>)\nOntology(<http://x>)") === "functional");
+    let threw = false;
+    try { load([["a.owx", '<?xml version="1.0"?>\n<Ontology xmlns="http://www.w3.org/2002/07/owl#" ontologyIRI="x"/>']]); } catch (e) { threw = /not supported/.test(e.message); }
+    check("unsupported formats explain how to convert", threw);
+
+    // ---- model
+    const m = NS.buildModel(rdf.g, rdf.docs, { languages: ["en"] });
+    const E = m.entities, O = "http://example.org/onto#";
+    check("declared class", E[O + "Robot"] && E[O + "Robot"].kind === "class");
+    check("label prefers the user's language, then untagged", E[O + "Robot"].label === "Robot", E[O + "Robot"].label);
+    check("undeclared superclass is inferred to be a class", E[O + "Agent"] && E[O + "Agent"].kind === "class" && E[O + "Agent"].undeclared);
+    check("restriction property is an object property", E[O + "partOf"] && E[O + "partOf"].kind === "op");
+    check("typed resource is an individual", E[O + "pr2"] && E[O + "pr2"].kind === "ind");
+    check("literal-valued fact makes a data property", E[O + "mass"] && E[O + "mass"].kind === "dp");
+    check("prefixed name", m.curie(O + "Robot") === "ex:Robot", m.curie(O + "Robot"));
+    const gripperAxioms = E[O + "Gripper"].supAnon.map((t) => t.map((x) => typeof x === "string" ? x : x.k || x.l || m.curie(x.r)).join(""));
+    check("Manchester rendering of restrictions", gripperAxioms.includes("ex:partOf some ex:Robot") && gripperAxioms.includes("ex:hasMass max 1"), gripperAxioms.join(" | "));
+    const eq = E[O + "DualArmRobot"].equiv[0].map((x) => typeof x === "string" ? x : x.k || x.l || m.curie(x.r)).join("");
+    check("Manchester rendering of a definition", eq === "ex:Robot and (ex:hasArm min 2 ex:Arm)", eq);
+    check("ontology header", m.ontologies[0] && m.ontologies[0].imports[0] === "http://example.org/other");
+    check("usage through blank nodes", E[O + "Robot"].usedBy.includes(O + "Gripper"));
+    check("asserted instances are listed on classes", E[O + "Robot"].members.includes(O + "pr2"));
+
+    // ---- structural reasoner
+    const r = load([["reasoning.ttl", await text("fixtures/reasoning.ttl")]]);
+    const rm = NS.buildModel(r.g, r.docs, { languages: ["en"] });
+    const RE = rm.entities;
+    const anc = (c) => RE[R + c].ancI;
+    const types = (i) => new Set([...RE[R + i].typesI]);
+    check("definition conjunct is a superclass", RE[R + "DualArmRobot"].supI.includes(R + "Robot"));
+    check("some via sub-property classifies under a defined class", anc("PR2Model").has(R + "ArmedThing"));
+    check("exactly 2 entails min 2", anc("TwoArmedRobot").has(R + "DualArmRobot"));
+    check("exactly 1 does not entail min 2", !anc("OneArmedRobot").has(R + "DualArmRobot"));
+    check("union definition: members are subclasses", anc("Wheeled").has(R + "Mobile") && anc("Legged").has(R + "Mobile"));
+    check("named equivalence", RE[R + "Gripper"].eqI.includes(R + "EndEffector") && anc("Gripper").has(R + "Arm"));
+    check("domain types an individual", types("pr2").has(R + "Robot") && types("pr2").has(R + "Agent"));
+    check("range types an individual", types("x").has(R + "Arm"));
+    check("realisation: some", types("pr2").has(R + "ArmedThing"));
+    check("realisation: data some", types("pr2").has(R + "HeavyThing"));
+    check("realisation: min 2 with distinct individuals", types("pr2").has(R + "DualArmRobot"));
+    check("no unique-name assumption", !types("maybeOneArm").has(R + "DualArmRobot") && types("maybeOneArm").has(R + "ArmedThing"));
+    check("inferred instances are listed on classes", RE[R + "DualArmRobot"].membersI.includes(R + "pr2"));
+  } catch (e) {
+    failed++;
+    lines.push("FAIL exception: " + (e && e.stack || e));
+  }
+  lines.push(failed ? `${failed} FAILED` : "ALL TESTS PASSED");
+  document.getElementById("out").textContent = lines.join("\n");
+  document.title = failed ? "FAIL" : "PASS";
+})();
+</script>
+</body>
+</html>

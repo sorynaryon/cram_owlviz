@@ -1,0 +1,82 @@
+name: Build and publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"  # every day: regenerate the ontology from the latest CRAM main
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "CRAM repository to generate the daily build from (owner/name)"
+        default: "cram2/cognitive_robot_abstract_machine"
+      ref:
+        description: "Branch, tag or commit"
+        default: "main"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CRAM_REPOSITORY: ${{ inputs.repository || 'cram2/cognitive_robot_abstract_machine' }}
+  CRAM_REF: ${{ inputs.ref || 'main' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out CRAM
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CRAM_REPOSITORY }}
+          ref: ${{ env.CRAM_REF }}
+          path: cram
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test the generator
+        run: python -m unittest discover -s tests -v
+
+      - name: Assemble the site and generate the CRAM ontology
+        run: |
+          mkdir -p _site/ontology
+          cp -r index.html css js vendor generator tests _site/
+          python generator/cram_ontology.py --source cram --repository "$CRAM_REPOSITORY" --ref "$CRAM_REF" \
+            --out _site/ontology/cram.ttl --summary _site/ontology/cram.json
+          cat _site/ontology/cram.json
+
+      - name: Run the browser tests
+        run: |
+          python -m http.server 8000 --directory _site --bind 127.0.0.1 &
+          sleep 2
+          google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=20000 \
+            --dump-dom http://127.0.0.1:8000/tests/index.html > result.html
+          sed -n '/<pre/,/<\/pre>/p' result.html
+          grep -q "<title>PASS</title>" result.html  # the runner sets the title once all checks pass
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

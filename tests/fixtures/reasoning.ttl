@@ -1,0 +1,46 @@
+# Structural reasoner expectations are in tests/index.html.
+@prefix : <http://example.org/r#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/r> a owl:Ontology .
+:Agent a owl:Class .
+:Robot a owl:Class ; rdfs:subClassOf :Agent .
+:Arm a owl:Class .
+:hasArm a owl:ObjectProperty ; rdfs:domain :Robot ; rdfs:range :Arm .
+:hasLeftArm a owl:ObjectProperty ; rdfs:subPropertyOf :hasArm .
+:hasMass a owl:DatatypeProperty .
+
+:DualArmRobot a owl:Class ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf ( :Robot
+        [ a owl:Restriction ; owl:onProperty :hasArm ; owl:minQualifiedCardinality "2"^^xsd:nonNegativeInteger ; owl:onClass :Arm ] ) ] .
+:ArmedThing a owl:Class ;
+    owl:equivalentClass [ a owl:Restriction ; owl:onProperty :hasArm ; owl:someValuesFrom :Arm ] .
+:HeavyThing a owl:Class ;
+    owl:equivalentClass [ a owl:Restriction ; owl:onProperty :hasMass ; owl:someValuesFrom xsd:double ] .
+
+# told: a left arm (sub-property) -> ArmedThing
+:PR2Model a owl:Class ; rdfs:subClassOf :Robot , [ a owl:Restriction ; owl:onProperty :hasLeftArm ; owl:someValuesFrom :Arm ] .
+# exactly 2 arms -> min 2 arms -> DualArmRobot
+:TwoArmedRobot a owl:Class ; rdfs:subClassOf :Robot ,
+    [ a owl:Restriction ; owl:onProperty :hasArm ; owl:qualifiedCardinality "2"^^xsd:nonNegativeInteger ; owl:onClass :Arm ] .
+# not enough: only one arm
+:OneArmedRobot a owl:Class ; rdfs:subClassOf :Robot ,
+    [ a owl:Restriction ; owl:onProperty :hasArm ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Arm ] .
+
+# union definition and named equivalence
+:Mobile a owl:Class ; owl:equivalentClass [ a owl:Class ; owl:unionOf ( :Wheeled :Legged ) ] .
+:Wheeled a owl:Class .
+:Legged a owl:Class .
+:Gripper a owl:Class ; owl:equivalentClass :EndEffector .
+:EndEffector a owl:Class ; rdfs:subClassOf :Arm .
+
+# individuals
+:pr2 a owl:NamedIndividual ; :hasArm :left , :right ; :hasMass "200.0"^^xsd:double .
+:left a owl:NamedIndividual , :Arm .
+:right a owl:NamedIndividual , :Arm .
+[] a owl:AllDifferent ; owl:distinctMembers ( :left :right ) .
+:maybeOneArm a owl:NamedIndividual ; :hasArm :x , :y .
+:x a owl:NamedIndividual .
+:y a owl:NamedIndividual .

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>cram_owlviz</title>
+<meta name="description" content="Browse the CRAM ontology, generated daily from the cognitive_robot_abstract_machine repository, or any OWL ontology, in a Protégé-like viewer that runs in the browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='11' height='11' rx='3' fill='%23b8860b'/%3E%3Crect x='18' y='3' width='11' height='11' rx='3' fill='%232f7fc1'/%3E%3Crect x='3' y='18' width='11' height='11' rx='3' fill='%232b8a50'/%3E%3Crect x='18' y='18' width='11' height='11' rx='3' fill='%237d5bb8'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Sans:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/owlviz.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="brand" id="brand" type="button" title="Ontology overview">
+      <span class="brand-name">cram_owlviz</span>
+    </button>
+    <div class="source" id="source" hidden><span class="dot"></span><span id="sourceText"></span></div>
+    <div class="search">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+      <input id="q" type="search" placeholder="Search classes, properties, individuals…  ( / )" autocomplete="off" aria-label="Search the ontology" role="combobox" aria-expanded="false" aria-controls="results">
+      <div class="results" id="results" role="listbox" hidden></div>
+    </div>
+    <div class="toggles">
+      <label title="Structural reasoning: told hierarchy, equivalences, defined classes, domains and ranges. Not a complete DL reasoner."><input type="checkbox" id="optInferred" checked> Inferred</label>
+      <label><input type="checkbox" id="optImported"> Show imported</label>
+      <label><input type="checkbox" id="optLabels" checked> Labels</label>
+    </div>
+    <div class="top-actions"><button class="btn primary" id="openBtn" type="button">Open…</button></div>
+  </header>
+  <div class="main">
+    <aside class="side" aria-label="Entity hierarchy">
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <div class="tree-tools">
+        <input id="filter" type="search" placeholder="Filter tree" aria-label="Filter tree">
+        <button class="btn" id="groupBtn" type="button" title="Group top-level entries by module or package">Group</button>
+        <button class="btn" id="collapse" type="button">Collapse</button>
+      </div>
+      <div class="tree" id="tree" role="tree"></div>
+    </aside>
+    <main class="detail" id="detail" tabindex="-1"></main>
+  </div>
+</div>
+
+<dialog class="open" id="openDialog" aria-labelledby="openTitle">
+  <form method="dialog" class="open-head"><h2 id="openTitle">Open an ontology</h2><button class="btn" value="close">Close</button></form>
+  <div class="open-body">
+    <div class="msg" id="openMsg" hidden></div>
+    <section class="open-sec">
+      <h3>CRAM ontology <small>rebuilt every day from cram2/cognitive_robot_abstract_machine</small></h3>
+      <p id="dailyInfo">Generated from the Python classes of the CRAM monorepo: classes, dataclass fields as properties and restrictions, enum members as individuals.</p>
+      <div class="row"><button class="btn primary" id="loadDaily" type="button">Open the daily build</button><a class="btn" href="ontology/cram.ttl" download="cram.ttl">Download Turtle</a></div>
+    </section>
+    <section class="open-sec">
+      <h3>Generate from a fork or branch <small>runs in your browser</small></h3>
+      <p>Downloads the Python sources of any public GitHub fork, branch, tag or commit and builds the ontology with the same generator as the daily build. The first run also loads Python (Pyodide, about 10 MB) and takes a minute or two.</p>
+      <form class="row" id="generateForm">
+        <input class="field" type="text" id="repoInput" placeholder="owner/name" aria-label="GitHub repository (owner/name)" spellcheck="false">
+        <input class="field" type="text" id="refInput" placeholder="branch, tag or commit" aria-label="Branch, tag or commit" spellcheck="false" style="flex: 0 1 190px">
+        <button class="btn primary" type="submit">Generate</button>
+      </form>
+    </section>
+    <section class="open-sec">
+      <h3>Any OWL ontology <small>Turtle, RDF/XML, OWL Functional Syntax, N-Triples, N-Quads, TriG</small></h3>
+      <div class="drop" id="dropArea" tabindex="0" role="button"><span><b>Choose files</b> or drop them here</span><span>Select an ontology together with its imports to see them as one. Files stay in your browser.</span></div>
+      <form class="row" id="urlForm">
+        <input class="field" type="url" id="urlInput" placeholder="https://raw.githubusercontent.com/…/ontology.owl" aria-label="Ontology URL">
+        <button class="btn" type="submit">Open URL</button>
+      </form>
+      <div class="chips recent" id="examples"></div>
+      <details><summary class="foot" style="cursor:pointer">Paste text</summary>
+        <textarea class="field" id="pasteInput" placeholder="@prefix : &lt;http://example.org/onto#&gt; ." spellcheck="false"></textarea>
+        <div class="row"><button class="btn" id="pasteBtn" type="button">Open pasted text</button></div>
+      </details>
+      <label class="foot"><input type="checkbox" id="mergeOpt"> Add to the open ontology instead of replacing it</label>
+    </section>
+  </div>
+</dialog>
+
+<div class="busy" id="busy" hidden role="status" aria-live="polite"><div class="busy-card"><p id="busyText">Loading…</p><div class="bar" id="busyBar"><i></i></div></div></div>
+<div class="toast" id="toast" hidden role="status"></div>
+<div class="dropzone" id="dropzone" hidden>Drop OWL files to open them</div>
+<input type="file" id="fileInput" multiple hidden accept=".owl,.ttl,.rdf,.rdfs,.xml,.ofn,.nt,.nq,.trig,.n3,text/turtle,application/rdf+xml">
+
+<script src="vendor/n3.min.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/rdfxml.js"></script>
+<script src="js/functional.js"></script>
+<script src="js/model.js"></script>
+<script src="js/reasoner.js"></script>
+<script src="js/cram.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

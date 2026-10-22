@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<!-- RDF/XML syntax features the parser must handle; features.nt is the same graph as read by rdflib. -->
+<!DOCTYPE rdf:RDF [
+    <!ENTITY xsd "http://www.w3.org/2001/XMLSchema#" >
+]>
+<rdf:RDF xmlns="http://example.org/onto#"
+     xml:base="http://example.org/onto"
+     xmlns:ex="http://example.org/onto#"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+     xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <owl:Ontology rdf:about="">
+        <owl:imports rdf:resource="http://example.org/other"/>
+        <rdfs:comment xml:lang="en">An ontology &amp; its features.</rdfs:comment>
+    </owl:Ontology>
+    <!-- typed node element, rdf:ID, relative rdf:resource -->
+    <owl:Class rdf:ID="Robot">
+        <rdfs:subClassOf rdf:resource="#Agent"/>
+        <rdfs:label xml:lang="de">Roboter</rdfs:label>
+        <rdfs:label>Robot</rdfs:label>
+    </owl:Class>
+    <!-- nested node element and parseType="Resource" -->
+    <owl:Class rdf:about="#Gripper">
+        <rdfs:subClassOf>
+            <owl:Restriction>
+                <owl:onProperty rdf:resource="#partOf"/>
+                <owl:someValuesFrom rdf:resource="#Robot"/>
+            </owl:Restriction>
+        </rdfs:subClassOf>
+        <rdfs:subClassOf rdf:parseType="Resource">
+            <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+            <owl:onProperty rdf:resource="#hasMass"/>
+            <owl:maxCardinality rdf:datatype="&xsd;nonNegativeInteger">1</owl:maxCardinality>
+        </rdfs:subClassOf>
+    </owl:Class>
+    <!-- parseType="Collection" -->
+    <owl:Class rdf:about="http://example.org/onto#DualArmRobot">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="#Robot"/>
+                    <owl:Restriction>
+                        <owl:onProperty rdf:resource="#hasArm"/>
+                        <owl:minQualifiedCardinality rdf:datatype="&xsd;nonNegativeInteger">2</owl:minQualifiedCardinality>
+                        <owl:onClass rdf:resource="#Arm"/>
+                    </owl:Restriction>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+    </owl:Class>
+    <!-- property attributes, rdf:type as an attribute, rdf:nodeID -->
+    <rdf:Description rdf:about="#pr2" ex:name="PR2" rdf:type="http://example.org/onto#Robot">
+        <ex:hasArm rdf:nodeID="leftArm"/>
+        <ex:hasArm rdf:nodeID="rightArm"/>
+        <ex:mass rdf:datatype="http://www.w3.org/2001/XMLSchema#double">200.0</ex:mass>
+        <ex:location rdf:resource="lab#bench"/>
+    </rdf:Description>
+    <ex:Arm rdf:nodeID="leftArm" ex:side="left"/>
+    <ex:Arm rdf:nodeID="rightArm">
+        <ex:side>right</ex:side>
+    </ex:Arm>
+    <!-- empty property element with property attributes -->
+    <rdf:Description rdf:about="#arm2">
+        <ex:mountedOn ex:height="1.2"/>
+    </rdf:Description>
+    <!-- rdf:li in a container, xml:lang inheritance, parseType="Literal" -->
+    <rdf:Bag rdf:about="#tools" xml:lang="fr">
+        <rdf:li>pince</rdf:li>
+        <rdf:li rdf:resource="#gripper"/>
+    </rdf:Bag>
+    <rdf:Description rdf:about="#note">
+        <dc:description rdf:parseType="Literal"><b>bold</b> text</dc:description>
+    </rdf:Description>
+    <!-- xml:base on an element -->
+    <rdf:Description rdf:about="thing" xml:base="http://example.org/base2/">
+        <rdfs:seeAlso rdf:resource="other"/>
+    </rdf:Description>
+</rdf:RDF>
