@@ -2,7 +2,7 @@
 
 A Protégé-like OWL browser that runs entirely in the browser, published as a GitHub Page. By default it shows the **CRAM ontology**, which is generated every day from the Python classes of [cram2/cognitive_robot_abstract_machine](https://github.com/cram2/cognitive_robot_abstract_machine). It can also generate the ontology from any fork or branch, or open any other OWL ontology.
 
-**Live:** https://mrsoran2009-debug.github.io/cram_owlviz/
+**Live:** https://sorynaryon.github.io/cram_owlviz/
 
 ## What you can do
 

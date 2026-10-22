@@ -484,7 +484,7 @@
         ${constructRows ? `<h2 style="border-top:1px solid var(--line)">Class expression constructs</h2><div class="tbl-wrap"><table class="mods"><tbody>${constructRows}</tbody></table></div>` : ""}</section>
       ${quality ? `<section class="card"><h2>Checks</h2><div class="desc">${quality}</div></section>` : ""}
       <section class="card"><h2>Namespaces</h2><div class="tbl-wrap"><table class="mods"><thead><tr><th>Prefix</th><th>Namespace</th><th class="num">Entities</th></tr></thead><tbody>${nsRows}</tbody></table></div></section>
-      <p class="foot">cram_owlviz parses and reasons in your browser; files you open are not uploaded. Built in ${M.ms} ms. <a href="https://github.com/mrsoran2009-debug/cram_owlviz" target="_blank" rel="noopener">Source on GitHub</a>.</p>`;
+      <p class="foot">cram_owlviz parses and reasons in your browser; files you open are not uploaded. Built in ${M.ms} ms. <a href="https://github.com/sorynaryon/cram_owlviz" target="_blank" rel="noopener">Source on GitHub</a>.</p>`;
   }
 
   function renderDetail() {
